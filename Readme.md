@@ -1,4 +1,4 @@
-# SLS Assignment for breakout Game using Deep Reinforcement Learning
+# Breakout Game using Deep Reinforcement Learning
 
 ## Setup Guide
 
