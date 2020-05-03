@@ -11,7 +11,7 @@ pip install keras-applications==1.0.7 tensorflow==1.13.1
 
 - Install **h5py**
 ```
-pip install h5py`
+pip install h5py
 ```
 
 - Install **Pillow**: 
@@ -24,9 +24,11 @@ pip install Pillow
 pip install gym[atari]
 ```
 
-- Install **WandbLogger**
+- Install **pydot**, **pydotplus**, **graphviz**
 ```
-pip install wandb
+pip install pydot
+pip install pydotplus
+pip install graphviz
 ```
 
 - Install Keras-RL:

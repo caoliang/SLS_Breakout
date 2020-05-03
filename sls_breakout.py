@@ -10,8 +10,10 @@ from keras.models import Sequential, Model
 from keras.layers import Input, Conv2D, LeakyReLU, Dense, Activation, Flatten
 from keras.layers import Multiply, Lambda, Permute
 from keras.optimizers import Adam
+from keras.initializers import he_normal
 import keras.backend as K
 from keras.callbacks import Callback, LambdaCallback, CSVLogger
+from tensorflow.keras.utils import plot_model
 
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy
@@ -34,9 +36,6 @@ class AtariProcessor(Processor):
         return processed_observation.astype('uint8')  # saves storage in experience memory
 
     def process_state_batch(self, batch):
-        # We could perform this processing step in `process_observation`. In this case, however,
-        # we would need to store a `float32` array instead, which is 4x more memory intensive than
-        # an `uint8` array. This matters if we store 1M observations.
         processed_batch = batch.astype('float32') / 255.
         return processed_batch
 
@@ -79,6 +78,7 @@ class AwardLogger(Callback):
             award_file.write('\n')
             award_file.flush()
 
+    # Show step-award diagram
     def plot_award(self):
         headers = ['episode', 'step', 'award']
         df = pd.read_csv(self.filename, sep=',', names=headers, 
@@ -93,22 +93,26 @@ def main(args):
     # Supress waring message for CPU
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     
-    
+    # Breakout environment name
     ENV_NAME = 'BreakoutDeterministic-v0'
     
-    # Get the environment and extract the number of actions.
     env = gym.make(ENV_NAME)
     window_length = 4
     nb_steps = 500000
+    # learning reate
+    lr_rate = 1e-4
     
     # Application mode: train, test
     # train: Training breakout deep qlearning network
     # test: Test breakout deep qlearning network with pre-trained model
-    if len(args) == 0 or args[0] == 'test':
-        app_mode = 'test'
-    else:
-        app_mode = 'train'
+    default_app_mode = 'test'
+#    default_app_mode = 'train'
     
+    if len(args) == 0:
+        app_mode = default_app_mode
+    else:
+        app_mode = args[0]
+
     INPUT_SHAPE = (84, 84)
     
     try: 
@@ -116,12 +120,15 @@ def main(args):
         env.seed(123)
         nb_actions = env.action_space.n
         
-        # Next, we build a very simple model.
         input_frame = Input(shape=(window_length,) + INPUT_SHAPE)
         dqn_out = Permute((2, 3, 1))(input_frame)
-        dqn_out = Conv2D(32, (8, 8), strides=(4, 4), activation='relu')(dqn_out)
-        dqn_out = Conv2D(64, (4, 4), strides=(2, 2), activation='relu')(dqn_out)
-        dqn_out = Conv2D(64, (3, 3), strides=(1, 1), activation='relu')(dqn_out)
+        # Set he initializer for relu activation function
+        dqn_out = Conv2D(32, (8, 8), strides=(4, 4), activation='relu', 
+                         kernel_initializer=he_normal)(dqn_out)
+        dqn_out = Conv2D(64, (4, 4), strides=(2, 2), activation='relu',
+                         kernel_initializer=he_normal)(dqn_out)
+        dqn_out = Conv2D(64, (3, 3), strides=(1, 1), activation='relu',
+                         kernel_initializer=he_normal)(dqn_out)
         dqn_out = Flatten()(dqn_out)
         dqn_out = Dense(512)(dqn_out)
         dqn_out = LeakyReLU()(dqn_out)
@@ -131,37 +138,41 @@ def main(args):
         
         print(model.summary())
         
-        # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
-        # even the metrics!
         memory = SequentialMemory(limit=nb_steps, window_length=window_length)
         policy = BoltzmannQPolicy()
         processor = AtariProcessor(input_shape=INPUT_SHAPE)
         
-        dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, nb_steps_warmup=60,
-                       processor=processor, target_model_update=1e-2, policy=policy)
-        dqn.compile(Adam(lr=1e-5), metrics=['mae'])
+        # Important to change target_model_update which controls how often the target network is updated.
+        # Change to 10000 which is used in deep-mind code
+        dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, 
+                       # Whether to enable dueling network
+                       enable_dueling_network = True,
+                       nb_steps_warmup=60,
+                       processor=processor, target_model_update=1000, policy=policy)
+        dqn.compile(Adam(lr=lr_rate), metrics=['mae'])
         
         weights_filename = 'dqn_{}_weights.h5f'.format(ENV_NAME)
         log_filename = 'dqn_{}_log.json'.format(ENV_NAME)
         
         if app_mode == 'train':
-            # Okay, now it's time to learn something! We visualize the training here for show, but this
-            # slows down training quite a lot. You can always safely abort the training prematurely using
-            # Ctrl + C.
+            # Load existing weights if exists
+            if os.path.exists(weights_filename):
+                dqn.load_weights(weights_filename)
+                        
             checkpoint_weights_filename = 'dqn_' + ENV_NAME + '_weights_{step}.h5f'
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, 
                                                  interval=250000)]
-            callbacks += [FileLogger(log_filename, interval=100)]
-            dqn.fit(env, callbacks=callbacks, log_interval=10000,
-                    nb_steps=nb_steps, visualize=True, verbose=2)
+            callbacks += [FileLogger(log_filename, interval=1000)]
+            dqn.fit(env, callbacks=callbacks, log_interval=1000,
+                    nb_steps=nb_steps, visualize=False, verbose=2)
             
-            # After training is done, we save the final weights.
+            # Save weights after training completed
             dqn.save_weights(weights_filename, overwrite=True)
             
             env.reset()
             
-            # Finally, evaluate our algorithm for 5 episodes.
-            dqn.test(env, nb_episodes=5, visualize=True)
+            # Evaluation 5 episodes to show training results
+            dqn.test(env, nb_episodes=5, visualize=False)
             
         elif app_mode == 'test':
             awards_list = []
@@ -176,17 +187,51 @@ def main(args):
                 
             callbacks = [LambdaCallback(on_episode_end=print_test_logs)]
             callbacks += [LambdaCallback(on_step_end=csv_logger.on_step_end)]
-            callbacks += [LambdaCallback(on_episode_end=csv_logger.on_episode_end)]
+            callbacks += [LambdaCallback(
+                            on_episode_end=csv_logger.on_episode_end)]
             dqn.load_weights(weights_filename)
-            dqn.test(env, callbacks=callbacks, nb_episodes=10, visualize=True)
+            dqn.test(env, callbacks=callbacks, nb_episodes=10, 
+                     visualize=True)
             
             mean_award = np.mean(awards_list)
             print(f'Average awards: {mean_award:.2}')
             
+            # show step-award diagram
             csv_logger.plot_award()
-        
+            
+        elif app_mode == 'plot-mode':
+            model_filename = 'dqn_' + ENV_NAME + '_model.pdf'
+            plot_model(model, 
+                       to_file=model_filename, 
+                       show_shapes=True, 
+                       show_layer_names=False,
+                       rankdir='TB')
+        elif app_mode == 'plot-train':
+            
+            json_log_file = 'dqn_BreakoutDeterministic-v0_log.json'
+            records     = pd.read_json(json_log_file)
+            fig, ax = plt.subplots(2)
+#            plt.plot(records['episode'], records['loss'])
+            fig.suptitle("Loss Value vs Espisode Reward")
+            
+            ax[0].plot(records['episode'], records['loss'], label='losss')
+            ax[1].plot(records['episode'], records['episode_reward'], 
+                          label='reward')
+            
+            ax[0].set_ylabel('Losss')
+            ax[1].set_ylabel('Reward')
+                        
+            #plt.yticks([0, 0.005, 0.010, 0.050, 0.100])
+            #plt.title('Loss Value / Mean Q',fontsize=12)
+            #plt.legend(loc="upper left")
+            ax[1].set_xlabel("Episode")
+            #ax = plt.gca()
+            #ax.set_xticklabels([])
+            
+            plt.show()
+            
         else:
-            print(f"Only support 'train' or 'test' mode")
+            print(f"Only support 'train', 'test', 'plot-mode' mode")
     finally:
         if env is not None:
             env.close()
