@@ -99,14 +99,17 @@ def main(args):
     env = gym.make(ENV_NAME)
     window_length = 4
     nb_steps = 500000
-    # learning reate
-    lr_rate = 1e-4
+    # learning reate, based on later DeepMind paper called 
+    # "Rainbow: Combining Improvements in Deep Reinforcement Learning" 
+    # by Hessel et al. 2017 RMSProp was substituted for Adam 
+    # with a learning rate of 0.0000625
+    lr_rate = 0.0000625
     
     # Application mode: train, test
     # train: Training breakout deep qlearning network
     # test: Test breakout deep qlearning network with pre-trained model
-    default_app_mode = 'test'
-#    default_app_mode = 'train'
+    default_app_mode = 'train'
+#    default_app_mode = 'test'
     
     if len(args) == 0:
         app_mode = default_app_mode
@@ -124,11 +127,11 @@ def main(args):
         dqn_out = Permute((2, 3, 1))(input_frame)
         # Set he initializer for relu activation function
         dqn_out = Conv2D(32, (8, 8), strides=(4, 4), activation='relu', 
-                         kernel_initializer=he_normal)(dqn_out)
+                         kernel_initializer=he_normal())(dqn_out)
         dqn_out = Conv2D(64, (4, 4), strides=(2, 2), activation='relu',
-                         kernel_initializer=he_normal)(dqn_out)
+                         kernel_initializer=he_normal())(dqn_out)
         dqn_out = Conv2D(64, (3, 3), strides=(1, 1), activation='relu',
-                         kernel_initializer=he_normal)(dqn_out)
+                         kernel_initializer=he_normal())(dqn_out)
         dqn_out = Flatten()(dqn_out)
         dqn_out = Dense(512)(dqn_out)
         dqn_out = LeakyReLU()(dqn_out)
@@ -148,7 +151,7 @@ def main(args):
                        # Whether to enable dueling network
                        enable_dueling_network = True,
                        nb_steps_warmup=60,
-                       processor=processor, target_model_update=1000, policy=policy)
+                       processor=processor, target_model_update=1e-2, policy=policy)
         dqn.compile(Adam(lr=lr_rate), metrics=['mae'])
         
         weights_filename = 'dqn_{}_weights.h5f'.format(ENV_NAME)
@@ -190,7 +193,7 @@ def main(args):
             callbacks += [LambdaCallback(
                             on_episode_end=csv_logger.on_episode_end)]
             dqn.load_weights(weights_filename)
-            dqn.test(env, callbacks=callbacks, nb_episodes=10, 
+            dqn.test(env, callbacks=callbacks, nb_episodes=5, 
                      visualize=True)
             
             mean_award = np.mean(awards_list)
@@ -231,7 +234,7 @@ def main(args):
             plt.show()
             
         else:
-            print(f"Only support 'train', 'test', 'plot-mode' mode")
+            print(f"Only support 'train', 'test', 'plot-mode', 'plot-train' mode")
     finally:
         if env is not None:
             env.close()
