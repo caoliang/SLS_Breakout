@@ -16,7 +16,7 @@ from keras.callbacks import Callback, LambdaCallback, CSVLogger
 from tensorflow.keras.utils import plot_model
 
 from rl.agents.dqn import DQNAgent
-from rl.policy import BoltzmannQPolicy
+from rl.policy import BoltzmannQPolicy, EpsGreedyQPolicy, LinearAnnealedPolicy
 from rl.memory import SequentialMemory
 from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
@@ -98,7 +98,7 @@ def main(args):
     
     env = gym.make(ENV_NAME)
     window_length = 4
-    nb_steps = 500000
+    nb_steps = 1750000
     # learning reate, based on later DeepMind paper called 
     # "Rainbow: Combining Improvements in Deep Reinforcement Learning" 
     # by Hessel et al. 2017 RMSProp was substituted for Adam 
@@ -142,7 +142,9 @@ def main(args):
         print(model.summary())
         
         memory = SequentialMemory(limit=nb_steps, window_length=window_length)
-        policy = BoltzmannQPolicy()
+        #policy = BoltzmannQPolicy()
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                                      nb_steps=1000000)
         processor = AtariProcessor(input_shape=INPUT_SHAPE)
         
         # Important to change target_model_update which controls how often the target network is updated.
@@ -150,8 +152,14 @@ def main(args):
         dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, 
                        # Whether to enable dueling network
                        enable_dueling_network = True,
-                       nb_steps_warmup=60,
-                       processor=processor, target_model_update=1e-2, policy=policy)
+                       nb_steps_warmup=50000,
+                       processor=processor, 
+                       target_model_update=10000, 
+                       policy=policy, 
+                       gamma=.99,
+                       train_interval=4, 
+                       delta_clip=1.)
+
         dqn.compile(Adam(lr=lr_rate), metrics=['mae'])
         
         weights_filename = 'dqn_{}_weights.h5f'.format(ENV_NAME)
@@ -165,8 +173,8 @@ def main(args):
             checkpoint_weights_filename = 'dqn_' + ENV_NAME + '_weights_{step}.h5f'
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, 
                                                  interval=250000)]
-            callbacks += [FileLogger(log_filename, interval=1000)]
-            dqn.fit(env, callbacks=callbacks, log_interval=1000,
+            callbacks += [FileLogger(log_filename, interval=100)]
+            dqn.fit(env, callbacks=callbacks, log_interval=10000,
                     nb_steps=nb_steps, visualize=False, verbose=2)
             
             # Save weights after training completed
@@ -194,17 +202,18 @@ def main(args):
                             on_episode_end=csv_logger.on_episode_end)]
             dqn.load_weights(weights_filename)
             dqn.test(env, callbacks=callbacks, nb_episodes=5, 
-                     visualize=True)
+                     visualize=True, nb_max_episode_steps=2000)
             
             mean_award = np.mean(awards_list)
-            print(f'Average awards: {mean_award:.2}')
+            print('Average awards: {0:0.2f}'.format(mean_award))
             
             # show step-award diagram
             csv_logger.plot_award()
             
-        elif app_mode == 'plot-mode':
+        elif app_mode == 'plot-model':
             model_filename = 'dqn_' + ENV_NAME + '_model.pdf'
-            plot_model(model, 
+            dql_model = dqn.model
+            plot_model(dql_model, 
                        to_file=model_filename, 
                        show_shapes=True, 
                        show_layer_names=False,
@@ -234,7 +243,7 @@ def main(args):
             plt.show()
             
         else:
-            print(f"Only support 'train', 'test', 'plot-mode', 'plot-train' mode")
+            print(f"Only support 'train', 'test', 'plot-model', 'plot-train' mode")
     finally:
         if env is not None:
             env.close()
