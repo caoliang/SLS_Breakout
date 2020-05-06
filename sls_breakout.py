@@ -108,8 +108,8 @@ def main(args):
     # Application mode: train, test
     # train: Training breakout deep qlearning network
     # test: Test breakout deep qlearning network with pre-trained model
-    default_app_mode = 'train'
-#    default_app_mode = 'test'
+#    default_app_mode = 'train'
+    default_app_mode = 'test'
     
     if len(args) == 0:
         app_mode = default_app_mode
@@ -151,7 +151,7 @@ def main(args):
         # Change to 10000 which is used in deep-mind code
         dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, 
                        # Whether to enable dueling network
-                       enable_dueling_network = True,
+                       enable_dueling_network = False,
                        nb_steps_warmup=50000,
                        processor=processor, 
                        target_model_update=10000, 
@@ -166,9 +166,9 @@ def main(args):
         log_filename = 'dqn_{}_log.json'.format(ENV_NAME)
         
         if app_mode == 'train':
-            # Load existing weights if exists
-            if os.path.exists(weights_filename):
-                dqn.load_weights(weights_filename)
+#            # Load existing weights if exists
+#            if os.path.exists(weights_filename):
+#                dqn.load_weights(weights_filename)
                         
             checkpoint_weights_filename = 'dqn_' + ENV_NAME + '_weights_{step}.h5f'
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, 
