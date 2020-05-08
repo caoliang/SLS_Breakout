@@ -11,6 +11,7 @@ from keras.layers import Input, Conv2D, LeakyReLU, Dense, Activation, Flatten
 from keras.layers import Multiply, Lambda, Permute
 from keras.optimizers import Adam
 from keras.initializers import he_normal
+
 import keras.backend as K
 from keras.callbacks import Callback, LambdaCallback, CSVLogger
 from tensorflow.keras.utils import plot_model
@@ -164,7 +165,7 @@ def main(args):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     
     # Breakout environment name
-    ENV_NAME = 'BreakoutDeterministic-v0'
+    ENV_NAME = 'BreakoutDeterministic-v4'
     
     env = gym.make(ENV_NAME)
     window_length = 4
@@ -235,13 +236,9 @@ def main(args):
                        gamma=.99,
                        train_interval=4, 
                        delta_clip=1.)
-
-        def huber_loss_wrapper(**huber_loss_kwargs):    
-            def huber_loss_wrapped_function(y_true, y_pred):
-                return huber_loss(y_true, y_pred, **huber_loss_kwargs)    
-        return huber_loss_wrapped_function
-
-        dqn.compile(Adam(lr=lr_rate), metrics=['mae'])
+        
+        dqn.compile(Adam(lr=lr_rate),
+                    metrics=['mae'])
         
         weights_filename = 'dqn_{}_weights.h5f'.format(ENV_NAME)
         log_filename = 'dqn_{}_log.json'.format(ENV_NAME)
