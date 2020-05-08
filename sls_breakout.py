@@ -42,6 +42,76 @@ class AtariProcessor(Processor):
     def process_reward(self, reward):
         return np.clip(reward, -1., 1.)
 
+class StepLogger(Callback):
+    
+    def __init__(self, filename, separator=','):
+        self.sep = separator
+        self.filename = filename
+        self.init_file()
+    
+    def on_step_end(self, step_num, logs):
+#        print(f"step: {step_num}")
+#        for key, value in logs['info'].items():
+#            print(f"{key}: {value}")
+        
+        with open(self.filename, "a+") as step_file:
+            step_file.write(str(logs['episode']))
+            step_file.write(self.sep)
+            step_file.write(str(step_num))       
+            step_file.write(self.sep)
+            step_file.write(str(logs['reward']))
+            step_file.write(self.sep)
+            step_file.write(str(logs['info']['ale.lives']))
+            step_file.write('\n')
+            step_file.flush()
+
+    def init_file(self):
+        with open(self.filename, "w+") as step_file:
+            step_file.write('episode')
+            step_file.write(self.sep)
+            step_file.write('step')        
+            step_file.write(self.sep)
+            step_file.write('reward') 
+            step_file.write(self.sep)
+            step_file.write('lives') 
+            step_file.write('\n')
+            step_file.flush()
+
+class EpisodeLogger(Callback):
+    
+    def __init__(self, filename, separator=','):
+        self.sep = separator
+        self.filename = filename
+        self.episode = 0
+        self.init_file()
+    
+    def on_episode_end(self, episode_num, logs):
+#        print("=====")
+#        print(f"episode: {episode_num}")
+        
+        with open(self.filename, "a+") as step_file:
+            step_file.write(str(episode_num))
+            step_file.write(self.sep)
+            step_file.write(str(logs['nb_episode_steps']))       
+            step_file.write(self.sep)
+            step_file.write(str(logs['nb_steps']))
+            step_file.write(self.sep)
+            step_file.write(str(logs['episode_reward']))
+            step_file.write('\n')
+            step_file.flush()
+
+    def init_file(self):
+        with open(self.filename, "w+") as step_file:
+            step_file.write('episode')
+            step_file.write(self.sep)
+            step_file.write('step')        
+            step_file.write(self.sep)
+            step_file.write('total') 
+            step_file.write(self.sep)
+            step_file.write('reward') 
+            step_file.write('\n')
+            step_file.flush()
+
 class AwardLogger(Callback):
     
     def __init__(self, filename, separator=','):
@@ -57,9 +127,9 @@ class AwardLogger(Callback):
         
         with open(self.filename, "a+") as award_file:
             award_file.write(str(logs['episode']))
-            award_file.write(',')
+            award_file.write(self.sep)
             award_file.write(str(self.step))       
-            award_file.write(',')
+            award_file.write(self.sep)
             award_file.write(str(self.award)) 
             award_file.write('\n')
             award_file.flush()
@@ -71,9 +141,9 @@ class AwardLogger(Callback):
     def init_file(self):
         with open(self.filename, "w+") as award_file:
             award_file.write('episode')
-            award_file.write(',')
+            award_file.write(self.sep)
             award_file.write('step')        
-            award_file.write(',')
+            award_file.write(self.sep)
             award_file.write('reward') 
             award_file.write('\n')
             award_file.flush()
@@ -81,7 +151,7 @@ class AwardLogger(Callback):
     # Show step-award diagram
     def plot_award(self):
         headers = ['episode', 'step', 'award']
-        df = pd.read_csv(self.filename, sep=',', names=headers, 
+        df = pd.read_csv(self.filename, sep=self.sep, names=headers, 
                          skiprows=1)
         #print(list(df.columns.values))
         
@@ -142,23 +212,34 @@ def main(args):
         print(model.summary())
         
         memory = SequentialMemory(limit=nb_steps, window_length=window_length)
+        
         #policy = BoltzmannQPolicy()
-        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+        
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), 
+                                      attr='eps', 
+                                      value_max=1., 
+                                      value_min=.1, 
+                                      value_test=.05,
                                       nb_steps=1000000)
         processor = AtariProcessor(input_shape=INPUT_SHAPE)
         
-        # Important to change target_model_update which controls how often the target network is updated.
-        # Change to 10000 which is used in deep-mind code
         dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, 
                        # Whether to enable dueling network
                        enable_dueling_network = False,
+                       # Training starts afert warm-up steps 
                        nb_steps_warmup=50000,
                        processor=processor, 
+                       #controls how often the target network is updated
                        target_model_update=10000, 
                        policy=policy, 
                        gamma=.99,
                        train_interval=4, 
                        delta_clip=1.)
+
+        def huber_loss_wrapper(**huber_loss_kwargs):    
+            def huber_loss_wrapped_function(y_true, y_pred):
+                return huber_loss(y_true, y_pred, **huber_loss_kwargs)    
+        return huber_loss_wrapped_function
 
         dqn.compile(Adam(lr=lr_rate), metrics=['mae'])
         
@@ -170,12 +251,33 @@ def main(args):
 #            if os.path.exists(weights_filename):
 #                dqn.load_weights(weights_filename)
                         
-            checkpoint_weights_filename = 'dqn_' + ENV_NAME + '_weights_{step}.h5f'
+            checkpoint_weights_filename = 'dqn_' + ENV_NAME + \
+                                          '_weights_{step}.h5f'
+            
+            # Create step_logger and espisode_loger to monitor training
+#            step_filename = 'dqn_' + ENV_NAME + '_step.csv'
+#            episode_filename = 'dqn_' + ENV_NAME + '_episode.csv'
+#            step_logger = StepLogger(step_filename)
+#            episode_logger = EpisodeLogger(episode_filename)
+#            
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, 
                                                  interval=250000)]
             callbacks += [FileLogger(log_filename, interval=100)]
-            dqn.fit(env, callbacks=callbacks, log_interval=10000,
-                    nb_steps=nb_steps, visualize=False, verbose=2)
+            
+            # Add step_logger and espisode_logger as callbacks
+#            callbacks += [LambdaCallback(
+#                            on_step_end=step_logger.on_step_end)]
+#            callbacks += [LambdaCallback(
+#                            on_episode_end=episode_logger.on_episode_end)]
+#            
+            dqn.fit(env, 
+                    callbacks=callbacks, 
+                    log_interval=10000,
+                    nb_steps=nb_steps, 
+                    visualize=False,
+                    # To avoid hungs when all lifes are lost
+                    nb_max_episode_steps=2000,
+                    verbose=2)
             
             # Save weights after training completed
             dqn.save_weights(weights_filename, overwrite=True)
@@ -189,7 +291,7 @@ def main(args):
             awards_list = []
             #env.reset()
             csv_filename = 'dqn_' + ENV_NAME + '_test.csv'
-            csv_logger = AwardLogger(csv_filename, dqn)
+            csv_logger = AwardLogger(csv_filename)
                         
             def print_test_logs(batch, logs):
                 #print(batch)
@@ -243,7 +345,8 @@ def main(args):
             plt.show()
             
         else:
-            print(f"Only support 'train', 'test', 'plot-model', 'plot-train' mode")
+            print(f"Only support 'train', 'test', 'plot-model', " +
+                  f"'plot-train' mode")
     finally:
         if env is not None:
             env.close()

@@ -31,9 +31,9 @@ pip install pydotplus
 pip install graphviz
 ```
 
-- Install Keras-RL:
-
+- Install **wandb**
 ```
-pip install keras-rl
-``` 
+pip install wandb
+```
+
 
