@@ -55,7 +55,7 @@ class Agent(object):
 
     def fit(self, env, nb_steps, action_repetition=1, callbacks=None, verbose=1,
             visualize=False, nb_max_start_steps=0, start_step_policy=None, log_interval=10000,
-            nb_max_episode_steps=None):
+            nb_max_episode_steps=None, enable_life_lost_episode=False):
         """Trains the agent on the given environment.
 
         # Arguments
@@ -80,6 +80,7 @@ class Agent(object):
             nb_max_episode_steps (integer): Number of steps per episode that the agent performs before
                 automatically resetting the environment. Set to `None` if each episode should run
                 (potentially indefinitely) until the environment signals a terminal state.
+            enable_life_lost_episode: Whether enabel to check life lost and start new episode.
 
         # Returns
             A `keras.callbacks.History` instance that recorded the entire training process.
@@ -125,6 +126,11 @@ class Agent(object):
         episode_reward = None
         episode_step = None
         did_abort = False
+        
+        # Declare episode lives to restart espiode if life is lost
+        episode_lives = -1
+        life_lost = False
+        
         try:
             while self.step < nb_steps:
                 if observation is None:  # start of a new episode
@@ -167,6 +173,39 @@ class Agent(object):
                                     observation)
                             break
 
+                # List is lost so restart episode
+                if enable_life_lost_episode and not observation is None and life_lost:
+                    callbacks.on_episode_begin(episode)
+                    episode_step = np.int16(0)
+                    episode_reward = np.float32(0)
+
+                    # Perform random starts at beginning of episode and do not record them into the experience.
+                    # This slightly changes the start position between games.
+                    nb_random_start_steps = 0 if nb_max_start_steps == 0 else np.random.randint(
+                        nb_max_start_steps)
+                    for _ in range(nb_random_start_steps):
+                        if start_step_policy is None:
+                            action = env.action_space.sample()
+                        else:
+                            action = start_step_policy(observation)
+                        if self.processor is not None:
+                            action = self.processor.process_action(action)
+                        callbacks.on_action_begin(action)
+                        observation, reward, done, info = env.step(action)
+                        observation = deepcopy(observation)
+                        if self.processor is not None:
+                            observation, reward, done, info = self.processor.process_step(
+                                observation, reward, done, info)
+                        callbacks.on_action_end(action)
+                        if done:
+                            warnings.warn('Env ended before {} random steps could be performed at the start. You should probably lower the `nb_max_start_steps` parameter.'.format(
+                                nb_random_start_steps))
+                            observation = deepcopy(env.reset())
+                            if self.processor is not None:
+                                observation = self.processor.process_observation(
+                                    observation)
+                            break
+                
                 # At this point, we expect to be fully initialized.
                 assert episode_reward is not None
                 assert episode_step is not None
@@ -238,6 +277,39 @@ class Agent(object):
                     observation = None
                     episode_step = None
                     episode_reward = None
+                    episode_lives = -1
+                
+                life_lost = False
+                if enable_life_lost_episode and not done:
+                    # Check lives so if life is lost then starts new episode
+                    if not accumulated_info['ale.lives'] is None:
+                        lives = accumulated_info['ale.lives']
+                        # New game starts
+                        if episode_lives == -1 or episode_lives == lives:
+                            episode_lives = lives
+                        # Life is lost, so need start new episode
+                        elif episode_lives > lives:
+                            episode_lives = lives
+                            life_lost = True
+                        else:
+                            # Life is increasing
+                            print(f"Life is increased from {episode_lives} to " +
+                                  f"{lives}")
+                            
+                # Start new episode if life is lost
+                if enable_life_lost_episode and not done and life_lost:
+                     # This episode is finished, report and reset.
+                    episode_logs = {
+                        'episode_reward': episode_reward,
+                        'nb_episode_steps': episode_step,
+                        'nb_steps': self.step,
+                    }
+                    callbacks.on_episode_end(episode, episode_logs)
+
+                    episode += 1
+                    episode_step = None
+                    episode_reward = None
+                                        
         except KeyboardInterrupt:
             # We catch keyboard interrupts here so that training can be be safely aborted.
             # This is so common that we've built this right into this function, which ensures that

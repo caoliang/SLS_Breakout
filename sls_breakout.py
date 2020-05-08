@@ -169,7 +169,7 @@ def main(args):
     
     env = gym.make(ENV_NAME)
     window_length = 4
-    nb_steps = 1750000
+    nb_steps = 2150000
     # learning reate, based on later DeepMind paper called 
     # "Rainbow: Combining Improvements in Deep Reinforcement Learning" 
     # by Hessel et al. 2017 RMSProp was substituted for Adam 
@@ -179,8 +179,8 @@ def main(args):
     # Application mode: train, test
     # train: Training breakout deep qlearning network
     # test: Test breakout deep qlearning network with pre-trained model
-#    default_app_mode = 'train'
-    default_app_mode = 'test'
+    default_app_mode = 'train'
+#    default_app_mode = 'test'
     
     if len(args) == 0:
         app_mode = default_app_mode
@@ -235,7 +235,9 @@ def main(args):
                        policy=policy, 
                        gamma=.99,
                        train_interval=4, 
-                       delta_clip=1.)
+                       delta_clip=1.,
+                       #whether check life lost and start new episode
+                       enable_life_lost_episode=False)
         
         dqn.compile(Adam(lr=lr_rate),
                     metrics=['mae'])
