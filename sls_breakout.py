@@ -235,9 +235,7 @@ def main(args):
                        policy=policy, 
                        gamma=.99,
                        train_interval=4, 
-                       delta_clip=1.,
-                       #whether check life lost and start new episode
-                       enable_life_lost_episode=False)
+                       delta_clip=1.)
         
         dqn.compile(Adam(lr=lr_rate),
                     metrics=['mae'])
@@ -276,7 +274,9 @@ def main(args):
                     visualize=False,
                     # To avoid hungs when all lifes are lost
                     nb_max_episode_steps=2000,
-                    verbose=2)
+                    verbose=2,
+                    #whether check life lost and start new episode
+                    enable_life_lost_episode=False)
             
             # Save weights after training completed
             dqn.save_weights(weights_filename, overwrite=True)
