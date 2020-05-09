@@ -179,8 +179,8 @@ def main(args):
     # Application mode: train, test
     # train: Training breakout deep qlearning network
     # test: Test breakout deep qlearning network with pre-trained model
-    default_app_mode = 'train'
-#    default_app_mode = 'test'
+#    default_app_mode = 'train'
+    default_app_mode = 'test'
     
     if len(args) == 0:
         app_mode = default_app_mode
