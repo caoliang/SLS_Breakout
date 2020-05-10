@@ -165,11 +165,12 @@ def main(args):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     
     # Breakout environment name
-    ENV_NAME = 'BreakoutDeterministic-v4'
+    ENV_NAME = 'BreakoutDeterministic-v0'
+    #ENV_NAME = 'BreakoutDeterministic-v4'
     
     env = gym.make(ENV_NAME)
     window_length = 4
-    nb_steps = 2150000
+    nb_steps = 1750000
     # learning reate, based on later DeepMind paper called 
     # "Rainbow: Combining Improvements in Deep Reinforcement Learning" 
     # by Hessel et al. 2017 RMSProp was substituted for Adam 
@@ -216,12 +217,20 @@ def main(args):
         
         #policy = BoltzmannQPolicy()
         
+#        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), 
+#                                      attr='eps', 
+#                                      value_max=1., 
+#                                      value_min=.1, 
+#                                      value_test=.05,
+#                                      nb_steps=1000000)
+#        
         policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), 
                                       attr='eps', 
-                                      value_max=1., 
-                                      value_min=.1, 
+                                      value_max=.01, 
+                                      value_min=.001, 
                                       value_test=.05,
                                       nb_steps=1000000)
+                
         processor = AtariProcessor(input_shape=INPUT_SHAPE)
         
         dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, 
@@ -244,9 +253,9 @@ def main(args):
         log_filename = 'dqn_{}_log.json'.format(ENV_NAME)
         
         if app_mode == 'train':
-#            # Load existing weights if exists
-#            if os.path.exists(weights_filename):
-#                dqn.load_weights(weights_filename)
+            # Load existing weights if exists
+            if os.path.exists(weights_filename):
+                dqn.load_weights(weights_filename)
                         
             checkpoint_weights_filename = 'dqn_' + ENV_NAME + \
                                           '_weights_{step}.h5f'
