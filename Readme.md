@@ -7,6 +7,11 @@
 pip install keras==2.3.0 keras-applications==1.0.7 tensorflow==1.13.1
 ```
 
+- Install tensorflow-gpu for GUP training (optinal)
+```
+pip install tensorflow-gpu==1.13.1
+```
+
 - Install **gym** by OpenAI: [Installation instruction](https://github.com/openai/gym#installation)
 
 ```

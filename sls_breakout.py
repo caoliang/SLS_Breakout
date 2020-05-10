@@ -165,10 +165,9 @@ def main(args):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     
     # Breakout environment name
-    ENV_NAME = 'BreakoutDeterministic-v0'
-    #ENV_NAME = 'BreakoutDeterministic-v4'
+    default_env = 'BreakoutDeterministic-v0'
+    #default_env = 'BreakoutDeterministic-v4'
     
-    env = gym.make(ENV_NAME)
     window_length = 4
     nb_steps = 1750000
     # learning reate, based on later DeepMind paper called 
@@ -187,10 +186,20 @@ def main(args):
         app_mode = default_app_mode
     else:
         app_mode = args[0]
-
+        
+    if len(args) > 1:
+        if args[1] == 'v4':
+            ENV_NAME = 'BreakoutDeterministic-v4'
+        else:
+            ENV_NAME = 'BreakoutDeterministic-v0'
+    else:
+        ENV_NAME = default_env
+    
     INPUT_SHAPE = (84, 84)
     
     try: 
+        env = gym.make(ENV_NAME)
+
         np.random.seed(123)
         env.seed(123)
         nb_actions = env.action_space.n
@@ -226,9 +235,9 @@ def main(args):
 #        
         policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), 
                                       attr='eps', 
-                                      value_max=.01, 
-                                      value_min=.001, 
-                                      value_test=.05,
+                                      value_max=.001, 
+                                      value_min=.0001, 
+                                      value_test=.00005,
                                       nb_steps=1000000)
                 
         processor = AtariProcessor(input_shape=INPUT_SHAPE)
@@ -330,7 +339,7 @@ def main(args):
                        rankdir='TB')
         elif app_mode == 'plot-train':
             
-            json_log_file = 'dqn_BreakoutDeterministic-v0_log.json'
+            json_log_file = 'dqn_' + ENV_NAME + '_log.json'
             records     = pd.read_json(json_log_file)
             fig, ax = plt.subplots(2)
 #            plt.plot(records['episode'], records['loss'])
