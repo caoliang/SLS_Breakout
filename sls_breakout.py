@@ -304,7 +304,7 @@ def main(args):
                     nb_steps=nb_steps, 
                     visualize=False,
                     # To avoid hungs when all lifes are lost
-                    nb_max_episode_steps=2000,
+                    nb_max_episode_steps=4000,
                     verbose=2,
                     #whether check life lost and start new episode
                     enable_life_lost_episode=life_check)
@@ -334,7 +334,7 @@ def main(args):
                             on_episode_end=csv_logger.on_episode_end)]
             dqn.load_weights(weights_filename)
             dqn.test(env, callbacks=callbacks, nb_episodes=5, 
-                     visualize=True, nb_max_episode_steps=2000)
+                     visualize=True, nb_max_episode_steps=4000)
             
             mean_award = np.mean(awards_list)
             print('Average awards: {0:0.2f}'.format(mean_award))
