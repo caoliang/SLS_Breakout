@@ -255,6 +255,23 @@ class Agent(object):
                 episode_step += 1
                 self.step += 1
 
+                life_lost = False
+                if enable_life_lost_episode and not done:
+                    # Check lives so if life is lost then starts new episode
+                    if not accumulated_info['ale.lives'] is None:
+                        lives = accumulated_info['ale.lives']
+                        # New game starts
+                        if episode_lives == -1 or episode_lives == lives:
+                            episode_lives = lives
+                        # Life is lost, so need start new episode
+                        elif episode_lives > lives:
+                            episode_lives = lives
+                            life_lost = True
+                        else:
+                            # Life is increasing
+                            print(f"Life is increased from {episode_lives} to " +
+                                  f"{lives}")
+
                 if done:
                     # We are in a terminal state but the agent hasn't yet seen it. We therefore
                     # perform one more forward-backward call and simply ignore the action before
@@ -277,27 +294,13 @@ class Agent(object):
                     episode_step = None
                     episode_reward = None
                     episode_lives = -1
-                
-                life_lost = False
-                if enable_life_lost_episode and not done:
-                    # Check lives so if life is lost then starts new episode
-                    if not accumulated_info['ale.lives'] is None:
-                        lives = accumulated_info['ale.lives']
-                        # New game starts
-                        if episode_lives == -1 or episode_lives == lives:
-                            episode_lives = lives
-                        # Life is lost, so need start new episode
-                        elif episode_lives > lives:
-                            episode_lives = lives
-                            life_lost = True
-                        else:
-                            # Life is increasing
-                            print(f"Life is increased from {episode_lives} to " +
-                                  f"{lives}")
-                            
+                                            
                 # Start new episode if life is lost
                 if enable_life_lost_episode and not done and life_lost:
-                     # This episode is finished, report and reset.
+                    self.forward(observation)
+                    self.backward(0., terminal=False)
+
+                    # This episode is finished, report and reset.
                     episode_logs = {
                         'episode_reward': episode_reward,
                         'nb_episode_steps': episode_step,
@@ -306,8 +309,10 @@ class Agent(object):
                     callbacks.on_episode_end(episode, episode_logs)
 
                     episode += 1
+                    observation = None
                     episode_step = None
                     episode_reward = None
+                    episode_lives = -1
                                         
         except KeyboardInterrupt:
             # We catch keyboard interrupts here so that training can be be safely aborted.

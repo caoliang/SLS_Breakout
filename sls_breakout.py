@@ -182,6 +182,9 @@ def main(args):
 #    default_app_mode = 'train'
     default_app_mode = 'test'
     
+    # Whether check life lost for new episode
+    default_life_lost_check = False
+    
     if len(args) == 0:
         app_mode = default_app_mode
     else:
@@ -194,6 +197,14 @@ def main(args):
             ENV_NAME = 'BreakoutDeterministic-v0'
     else:
         ENV_NAME = default_env
+
+    if len(args) > 2:
+        if args[2] == 'check_life_lost':
+            life_check = True
+        else:
+            life_check = False
+    else:
+        life_check = default_life_lost_check
     
     INPUT_SHAPE = (84, 84)
     
@@ -253,7 +264,9 @@ def main(args):
                        policy=policy, 
                        gamma=.99,
                        train_interval=4, 
-                       delta_clip=1.)
+                       delta_clip=1.,
+                       
+                       )
         
         dqn.compile(Adam(lr=lr_rate),
                     metrics=['mae'])
@@ -294,7 +307,7 @@ def main(args):
                     nb_max_episode_steps=2000,
                     verbose=2,
                     #whether check life lost and start new episode
-                    enable_life_lost_episode=False)
+                    enable_life_lost_episode=life_check)
             
             # Save weights after training completed
             dqn.save_weights(weights_filename, overwrite=True)
