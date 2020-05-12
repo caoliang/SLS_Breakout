@@ -375,8 +375,9 @@ def main(args):
             plt.show()
             
         else:
-            print(f"Only support 'train', 'test', 'plot-model', " +
-                  f"'plot-train' mode")
+            print(f"Syntax: python sls_breakout.py " +
+                  f"<train | test | plot-model | plot-train> "+
+                  f"[v4|v2] [check_life_lost]")
     finally:
         if env is not None:
             env.close()
